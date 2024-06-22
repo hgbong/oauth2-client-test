@@ -1,5 +1,6 @@
 package com.example.oauth2_client_test.controller;
 
+import com.example.oauth2_client_test.config.PidUserDetails;
 import com.example.oauth2_client_test.entity.PidUser;
 import com.example.oauth2_client_test.repository.PidUserRepository;
 import lombok.AllArgsConstructor;
@@ -7,8 +8,12 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Controller;
+import org.springframework.util.Assert;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -37,8 +42,14 @@ public class TestController {
     }
 
     @ResponseBody
-    @GetMapping("/test")
-    public String test() { return "this is authenticated page!!!!"; }
+    @GetMapping("/userInfo")
+    public String userInfo() {
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        UserDetails loggedInUser = (PidUserDetails) authentication.getPrincipal();// PidUserDetails type
+        Assert.notNull(loggedInUser, "need authentication url.");
+
+        return String.format("login success. username: %s, authorities: %s", loggedInUser.getUsername(), loggedInUser.getAuthorities());
+    }
 
     @ResponseBody
     @GetMapping("/users")
@@ -55,8 +66,6 @@ public class TestController {
     public String formLogin() {
         return "th/form/login";
     }
-
-
 
     @Getter
     @Setter
