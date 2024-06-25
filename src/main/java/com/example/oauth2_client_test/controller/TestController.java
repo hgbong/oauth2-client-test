@@ -1,15 +1,21 @@
 package com.example.oauth2_client_test.controller;
 
 import com.example.oauth2_client_test.config.PidUserDetails;
+import com.example.oauth2_client_test.config.SessionListener;
 import com.example.oauth2_client_test.entity.PidUser;
 import com.example.oauth2_client_test.repository.PidUserRepository;
+import com.warrenstrange.googleauth.GoogleAuthenticator;
+import com.warrenstrange.googleauth.GoogleAuthenticatorKey;
+import com.warrenstrange.googleauth.GoogleAuthenticatorQRGenerator;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
+import jakarta.servlet.http.HttpSession;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.core.Authentication;
-import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.core.userdetails.UserDetails;
@@ -20,9 +26,8 @@ import org.springframework.stereotype.Controller;
 import org.springframework.util.Assert;
 import org.springframework.web.bind.annotation.*;
 
-import java.util.Collection;
-import java.util.List;
-import java.util.Map;
+import java.time.LocalDateTime;
+import java.util.*;
 import java.util.stream.Collectors;
 
 @Controller
@@ -31,7 +36,7 @@ public class TestController {
     @Autowired PasswordEncoder passwordEncoder;
 
     @ResponseBody
-    @GetMapping(value = {"/", "/home","/login", "/index"})
+    @GetMapping(value = {"/", "/home", "/index"})
     public String home() { return "access allowed!!!"; }
 
     // 만약 ss6 설정에서 permit 안해줬으면 => 401
@@ -44,7 +49,52 @@ public class TestController {
         // 고려사항: 로그인 쪽도 pE.matches 쓰게 되지만, 개발자는 신경 X
         //   (UserDetailsService 구현 시 DB 조회한 유저의 pw를 UserDetails.password 그대로 전달 (어차피 DB상 암호화된 상태)
         pidUser.setPassword(passwordEncoder.encode((String) dto.get("password")));
+        pidUser.setCreatedAt(LocalDateTime.now());
         pidUserRepository.save(pidUser);
+
+    }
+
+    // for redirect test
+    @GetMapping("/signup")
+    public String signupPage() {
+        return "signup";
+    }
+
+    // for redirect test
+    @PostMapping("/signup")
+    public String signup() {
+        //return "th/form/login?signup";
+        return "redirect:/form/login.html?signup";
+    }
+
+    GoogleAuthenticator googleAuthenticator = new GoogleAuthenticator();
+
+    private String key;
+    @GetMapping("/qr") @ResponseBody
+    public String qr() {
+
+        GoogleAuthenticatorKey googleAuthenticatorKey = googleAuthenticator.createCredentials();
+
+        // 실제론 생성한 key를 DB에 저장해놔야 나중에 OTP를 검증할 수 있음
+        key = googleAuthenticatorKey.getKey();
+        System.out.println("전역 키 key = " + key);
+
+        String QRUrl = GoogleAuthenticatorQRGenerator.getOtpAuthURL("adduci", "userId", googleAuthenticatorKey);
+        System.out.println("QR URL : " + QRUrl);
+
+        return QRUrl;
+    }
+
+    @PostMapping("/qr-check")
+    public void qrCheck(@RequestBody Map<String, Object> reqBody) { // code = 13224
+        int code = (int) reqBody.get("code");
+
+        String wrongKey = "2UJNWSKOIWVMXEXY";
+
+        System.out.println(String.format("key:%s, code:%s, verify:%s", wrongKey, code, googleAuthenticator.authorize(wrongKey, code)));
+        System.out.println(String.format("key:%s, code:%s, verify:%s", key, code, googleAuthenticator.authorize(key, code)));
+
+        System.out.println(String.format("hardcoding test\nkey:%s, code:%s, verify:{}", key, 3334, googleAuthenticator.authorize(key, 3334)));
     }
 
     // 여러 인증방식을 사용할 경우, 인증 객체 타입이 다른 문제가 있음
@@ -122,7 +172,7 @@ public class TestController {
     public List<UserResponseDto> listUsers() {
         return pidUserRepository.findAll()
                 .stream()
-                .map(e -> new UserResponseDto(e.getName(), e.getPassword()))
+                .map(e -> new UserResponseDto(e.getName(), e.getPassword(), e.getCreatedAt()))
                 .collect(Collectors.toList());
     }
 
@@ -132,6 +182,41 @@ public class TestController {
         return "th/form/login";
     }
 
+
+    @ResponseBody
+    @GetMapping("/session")
+    public String session(HttpServletRequest request,
+                          HttpServletResponse response,
+                          HttpSession session) {
+        Assert.isTrue(request.getSession() == session, "request.getSession() is equals to HttpSession session.");
+        request.getCookies(); // JSESSIONID=abc
+        request.getSession(); // "abc"키에 매핑된 HttpSession 객체
+
+        Object o = new Object();
+        session.setAttribute("sname", o.hashCode());
+        StringBuilder sb = new StringBuilder("sessions\n");
+        Enumeration<String> attributeNames = session.getAttributeNames();
+        if (attributeNames.hasMoreElements()) {
+            String sessionKeyId = attributeNames.nextElement();
+            Object attribute = session.getAttribute(sessionKeyId);
+
+            sb.append(String.format("key: %s, attrValue: %s", sessionKeyId, attribute));
+        }
+
+        return sb.toString();
+    }
+
+    @Autowired
+    HttpSession sessionbean;
+
+    @ResponseBody
+    @GetMapping("/session-bean")
+    public String sessionFromBean() {
+        Object hashcode = sessionbean.getAttribute("sname"); // proxy session bean type 확인 (scoped proxy)
+        return String.valueOf(hashcode); // /session 호출 시 object hashcode
+    }
+
+
     @Getter
     @Setter
     @AllArgsConstructor
@@ -139,5 +224,6 @@ public class TestController {
     static class UserResponseDto {
         private String name;
         private String password;
+        private LocalDateTime createdAt;
     }
 }

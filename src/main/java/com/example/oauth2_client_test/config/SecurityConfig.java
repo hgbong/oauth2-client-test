@@ -23,7 +23,10 @@ public class SecurityConfig {
         http
             .csrf(AbstractHttpConfigurer::disable)
             .authorizeHttpRequests(authorizeRequests -> authorizeRequests
-                .requestMatchers("/", "/home", "/index").permitAll() // "/form/login 은 아래에서 permit
+                // for test
+                .requestMatchers("/**").permitAll()
+
+                .requestMatchers("/", "/home", "/index", "/signup").permitAll() // "/form/login 은 아래에서 permit
                 .requestMatchers("/users").permitAll() // 회원가입, 목록조회용
                 .requestMatchers("/css/**", "/js/**", "/images/**","static/**", "/favicon.ico").permitAll() // 정적 리소스에 대한 접근 허용
                 .anyRequest().authenticated())
