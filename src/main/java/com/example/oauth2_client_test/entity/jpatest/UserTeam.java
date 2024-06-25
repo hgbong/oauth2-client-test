@@ -17,7 +17,7 @@ public class UserTeam {
     @JoinColumn(name = "user_id", referencedColumnName = "id") // rcn=> 레퍼런스하는 컬럼 (즉, USER 테이블의 PK)
     private User user;
 
-    @ManyToOne
+    @ManyToOne(cascade = CascadeType.PERSIST)
     @JoinColumn(name = "team_123")
     private Team team;
 
